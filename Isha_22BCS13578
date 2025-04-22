@@ -1,0 +1,266 @@
+// EASY LEVEL - Spring Dependency Injection
+
+// Course.java
+public class Course {
+    private String courseName;
+    private int duration;
+
+    public Course(String courseName, int duration) {
+        this.courseName = courseName;
+        this.duration = duration;
+    }
+
+    public String getCourseName() {
+        return courseName;
+    }
+
+    public int getDuration() {
+        return duration;
+    }
+}
+
+// Student.java
+public class Student {
+    private String name;
+    private Course course;
+
+    public Student(String name, Course course) {
+        this.name = name;
+        this.course = course;
+    }
+
+    public void displayInfo() {
+        System.out.println("Student: " + name);
+        System.out.println("Course: " + course.getCourseName() + ", Duration: " + course.getDuration() + " months");
+    }
+}
+
+// AppConfig.java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class AppConfig {
+    @Bean
+    public Course course() {
+        return new Course("Java Full Stack", 6);
+    }
+
+    @Bean
+    public Student student() {
+        return new Student("Alice", course());
+    }
+}
+
+// Main.java
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+public class Main {
+    public static void main(String[] args) {
+        ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
+        Student student = context.getBean(Student.class);
+        student.displayInfo();
+    }
+}
+
+
+// MEDIUM LEVEL - Hibernate CRUD
+
+// Student.java
+import javax.persistence.*;
+
+@Entity
+@Table(name = "student")
+public class Student {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    private String name;
+    private int age;
+
+    // getters and setters
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public int getAge() { return age; }
+    public void setAge(int age) { this.age = age; }
+}
+
+// HibernateUtil.java
+import org.hibernate.SessionFactory;
+import org.hibernate.cfg.Configuration;
+
+public class HibernateUtil {
+    private static final SessionFactory sessionFactory = buildSessionFactory();
+
+    private static SessionFactory buildSessionFactory() {
+        return new Configuration().configure("hibernate.cfg.xml").addAnnotatedClass(Student.class).buildSessionFactory();
+    }
+
+    public static SessionFactory getSessionFactory() {
+        return sessionFactory;
+    }
+}
+
+// StudentDao.java
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import java.util.List;
+
+public class StudentDao {
+    public void saveStudent(Student student) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Transaction tx = session.beginTransaction();
+        session.save(student);
+        tx.commit();
+        session.close();
+    }
+
+    public Student getStudent(int id) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Student s = session.get(Student.class, id);
+        session.close();
+        return s;
+    }
+
+    public void updateStudent(Student student) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Transaction tx = session.beginTransaction();
+        session.update(student);
+        tx.commit();
+        session.close();
+    }
+
+    public void deleteStudent(Student student) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Transaction tx = session.beginTransaction();
+        session.delete(student);
+        tx.commit();
+        session.close();
+    }
+
+    public List<Student> listStudents() {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        List<Student> list = session.createQuery("from Student", Student.class).list();
+        session.close();
+        return list;
+    }
+}
+
+// TestCRUD.java
+public class TestCRUD {
+    public static void main(String[] args) {
+        StudentDao dao = new StudentDao();
+
+        Student s1 = new Student();
+        s1.setName("Ravi");
+        s1.setAge(22);
+        dao.saveStudent(s1);
+
+        System.out.println("Saved Student: " + s1.getId());
+
+        Student s2 = dao.getStudent(s1.getId());
+        System.out.println("Fetched Student: " + s2.getName());
+    }
+}
+
+
+// HARD LEVEL - Spring + Hibernate Transaction Management
+
+// Account.java
+import javax.persistence.*;
+
+@Entity
+@Table(name = "account")
+public class Account {
+    @Id
+    private int id;
+    private String name;
+    private double balance;
+
+    // getters and setters
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public double getBalance() { return balance; }
+    public void setBalance(double balance) { this.balance = balance; }
+}
+
+// Transaction.java
+import javax.persistence.*;
+import java.util.Date;
+
+@Entity
+@Table(name = "transaction")
+public class Transaction {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    private int fromAccountId;
+    private int toAccountId;
+    private double amount;
+    private Date timestamp = new Date();
+
+    // getters and setters
+}
+
+// BankService.java
+public interface BankService {
+    void transferMoney(int fromId, int toId, double amount);
+}
+
+// BankServiceImpl.java
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+
+public class BankServiceImpl implements BankService {
+    public void transferMoney(int fromId, int toId, double amount) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Transaction tx = session.beginTransaction();
+
+        try {
+            Account from = session.get(Account.class, fromId);
+            Account to = session.get(Account.class, toId);
+
+            if (from.getBalance() < amount) throw new RuntimeException("Insufficient Balance");
+
+            from.setBalance(from.getBalance() - amount);
+            to.setBalance(to.getBalance() + amount);
+
+            session.update(from);
+            session.update(to);
+
+            Transaction t = new Transaction();
+            t.setFromAccountId(fromId);
+            t.setToAccountId(toId);
+            t.setAmount(amount);
+
+            session.save(t);
+            tx.commit();
+        } catch (Exception e) {
+            tx.rollback();
+            throw e;
+        } finally {
+            session.close();
+        }
+    }
+}
+
+// TestTransaction.java
+public class TestTransaction {
+    public static void main(String[] args) {
+        BankService service = new BankServiceImpl();
+        try {
+            service.transferMoney(1, 2, 500.0);
+            System.out.println("Transaction successful");
+        } catch (Exception e) {
+            System.out.println("Transaction failed: " + e.getMessage());
+        }
+    }
+}
